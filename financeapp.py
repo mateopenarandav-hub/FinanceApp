@@ -42,7 +42,7 @@ def load_transactions(file):
         df = pd.read_csv(file)
         df.columns = [col.strip() for col in df.columns]
         df["Amount"] = pd.to_numeric(df["Amount"].astype(str).str.replace(",", ""), errors="coerce")
-        df["Date"] = pd.to_datetime(df["Date"], format="%d %b %Y")
+        df["Date"] = pd.to_datetime(df["Date"], dayfirst=True)
 
         return categorize_transactions(df)
     except Exception as e:
