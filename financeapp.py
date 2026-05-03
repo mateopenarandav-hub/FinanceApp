@@ -62,7 +62,7 @@ def load_transactions(file):
 
         df["Category"] = "Uncategorized"
 
-        # 🔥 Add Month column
+        # Add Month column
         df["Month"] = df["Date"].dt.to_period("M").astype(str)
 
         return categorize_transactions(df)
@@ -176,7 +176,7 @@ def main():
                 )
                 st.plotly_chart(fig_pie, use_container_width=True)
 
-                # -------- MONTHLY TREND --------
+                # -------- MONTHLY TREND (BAR CHART) --------
                 st.subheader("Monthly Trend")
 
                 monthly_totals = (
@@ -185,14 +185,19 @@ def main():
                     .sum()
                     .abs()
                     .reset_index()
+                    .sort_values("Month")
                 )
 
-                fig_month = px.line(
+                fig_month = px.bar(
                     monthly_totals,
                     x="Month",
                     y="Amount",
-                    title="Monthly Expenses"
+                    title="Monthly Expenses",
+                    text="Amount"
                 )
+
+                fig_month.update_traces(texttemplate='%{text:.2s}', textposition='outside')
+                fig_month.update_layout(xaxis_title="Month", yaxis_title="Amount (QAR)")
 
                 st.plotly_chart(fig_month, use_container_width=True)
 
