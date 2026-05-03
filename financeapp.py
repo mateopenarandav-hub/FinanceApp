@@ -4,16 +4,16 @@ import plotly.express as px
 import json
 import os
 
-# MUST be first Streamlit command
+# ---------------- CONFIG ----------------
 st.set_page_config(page_title="Finance App", page_icon="💰", layout="wide")
 
 category_file = "categories.json"
 
-# ---------------- SESSION STATE ----------------
+# ---------------- SESSION ----------------
 if "categories" not in st.session_state:
     st.session_state.categories = {"Uncategorized": []}
 
-# ---------------- LOAD SAVED CATEGORIES ----------------
+# Load saved categories
 if os.path.exists(category_file):
     try:
         with open(category_file, "r") as f:
@@ -40,7 +40,6 @@ def categorize_transactions(df):
 
         for keyword in keywords:
             keyword = keyword.lower().strip()
-
             mask = df["Details"].astype(str).str.lower().str.contains(keyword, na=False)
             df.loc[mask, "Category"] = category
 
@@ -50,20 +49,21 @@ def categorize_transactions(df):
 # ---------------- LOAD DATA ----------------
 def load_transactions(file):
     try:
-        df = pd.read_csv(file)
+        # Encoding fallback
+        try:
+            df = pd.read_csv(file, encoding="utf-8")
+        except UnicodeDecodeError:
+            df = pd.read_csv(file, encoding="latin-1")
+
         df.columns = df.columns.str.strip()
 
-        # Amount cleanup
-        df["Amount"] = pd.to_numeric(
-            df["Amount"].astype(str).str.replace(",", ""),
-            errors="coerce"
-        )
-
-        # Date cleanup (your format is DD/MM/YYYY)
+        df["Amount"] = pd.to_numeric(df["Amount"], errors="coerce")
         df["Date"] = pd.to_datetime(df["Date"], dayfirst=True, errors="coerce")
 
-        # Ensure required column exists
         df["Category"] = "Uncategorized"
+
+        # 🔥 Add Month column
+        df["Month"] = df["Date"].dt.to_period("M").astype(str)
 
         return categorize_transactions(df)
 
@@ -72,7 +72,7 @@ def load_transactions(file):
         return None
 
 
-# ---------------- ADD KEYWORDS ----------------
+# ---------------- KEYWORD LEARNING ----------------
 def add_keyword_to_category(category, keyword):
     keyword = keyword.strip()
 
@@ -84,7 +84,7 @@ def add_keyword_to_category(category, keyword):
     return False
 
 
-# ---------------- MAIN APP ----------------
+# ---------------- MAIN ----------------
 def main():
     st.title("💰 Finance Dashboard")
 
@@ -95,20 +95,27 @@ def main():
 
         if df is not None:
 
-            # ---------------- SPLIT DATA ----------------
+            # Split data
             expenses_df = df[df["Amount"] < 0].copy().reset_index(drop=True)
             refunds_df = df[df["Amount"] > 0].copy().reset_index(drop=True)
 
             st.session_state.expenses_df = expenses_df
 
-            # ---------------- TABS ----------------
             tab1, tab2 = st.tabs(["📉 Expenses", "💵 Refunds"])
 
             # ================= EXPENSES TAB =================
             with tab1:
-                st.subheader("Expenses")
 
-                # Add new category
+                # -------- MONTH FILTER --------
+                months = sorted(expenses_df["Month"].unique())
+                selected_month = st.selectbox("Select Month", ["All"] + list(months))
+
+                if selected_month != "All":
+                    filtered_df = expenses_df[expenses_df["Month"] == selected_month]
+                else:
+                    filtered_df = expenses_df
+
+                # -------- CATEGORY MANAGEMENT --------
                 new_category = st.text_input("New Category Name")
                 if st.button("Add Category"):
                     if new_category and new_category not in st.session_state.categories:
@@ -116,9 +123,11 @@ def main():
                         save_categories()
                         st.rerun()
 
-                # Editable table
+                # -------- TABLE --------
+                st.subheader("Expenses")
+
                 edited_df = st.data_editor(
-                    st.session_state.expenses_df[["Date", "Details", "Amount", "Category"]],
+                    filtered_df[["Date", "Details", "Amount", "Category"]],
                     column_config={
                         "Date": st.column_config.DateColumn("Date", format="DD/MM/YYYY"),
                         "Amount": st.column_config.NumberColumn("Amount", format="%.2f QAR"),
@@ -135,18 +144,21 @@ def main():
                 # Save edits
                 if st.button("Apply Changes"):
                     for idx, row in edited_df.iterrows():
-                        old_cat = st.session_state.expenses_df.at[idx, "Category"]
+                        original_idx = filtered_df.index[idx]
+                        old_cat = expenses_df.at[original_idx, "Category"]
                         new_cat = row["Category"]
 
                         if old_cat != new_cat:
-                            st.session_state.expenses_df.at[idx, "Category"] = new_cat
+                            expenses_df.at[original_idx, "Category"] = new_cat
                             add_keyword_to_category(new_cat, row["Details"])
 
-                # ---------------- SUMMARY ----------------
+                    st.session_state.expenses_df = expenses_df
+
+                # -------- SUMMARY --------
                 st.subheader("Expense Summary")
 
                 category_totals = (
-                    st.session_state.expenses_df
+                    filtered_df
                     .groupby("Category")["Amount"]
                     .sum()
                     .abs()
@@ -156,14 +168,73 @@ def main():
 
                 st.dataframe(category_totals, use_container_width=True, hide_index=True)
 
-                fig = px.pie(
+                fig_pie = px.pie(
                     category_totals,
                     values="Amount",
                     names="Category",
                     title="Expenses by Category"
                 )
+                st.plotly_chart(fig_pie, use_container_width=True)
 
-                st.plotly_chart(fig, use_container_width=True)
+                # -------- MONTHLY TREND --------
+                st.subheader("Monthly Trend")
+
+                monthly_totals = (
+                    expenses_df
+                    .groupby("Month")["Amount"]
+                    .sum()
+                    .abs()
+                    .reset_index()
+                )
+
+                fig_month = px.line(
+                    monthly_totals,
+                    x="Month",
+                    y="Amount",
+                    title="Monthly Expenses"
+                )
+
+                st.plotly_chart(fig_month, use_container_width=True)
+
+                # -------- CATEGORY vs MONTH --------
+                st.subheader("Category vs Month")
+
+                monthly_category = (
+                    expenses_df
+                    .groupby(["Month", "Category"])["Amount"]
+                    .sum()
+                    .abs()
+                    .reset_index()
+                )
+
+                fig_bar = px.bar(
+                    monthly_category,
+                    x="Month",
+                    y="Amount",
+                    color="Category",
+                    title="Expenses by Category per Month"
+                )
+
+                st.plotly_chart(fig_bar, use_container_width=True)
+
+                # -------- PIVOT TABLE --------
+                st.subheader("Detailed Table (Category x Month)")
+
+                pivot_table = (
+                    expenses_df
+                    .groupby(["Month", "Category"])["Amount"]
+                    .sum()
+                    .abs()
+                    .reset_index()
+                )
+
+                pivot_table = pivot_table.pivot(
+                    index="Category",
+                    columns="Month",
+                    values="Amount"
+                ).fillna(0)
+
+                st.dataframe(pivot_table, use_container_width=True)
 
             # ================= REFUNDS TAB =================
             with tab2:
