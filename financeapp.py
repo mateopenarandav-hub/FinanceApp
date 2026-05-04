@@ -4,21 +4,60 @@ import plotly.express as px
 import json
 import os
 import re
+from rapidfuzz import fuzz
 
 # ---------------- CONFIG ----------------
 st.set_page_config(page_title="Finance App", page_icon="💰", layout="wide")
 
 category_file = "categories.json"
 
+# ✅ PREDEFINED CATEGORIES
+DEFAULT_CATEGORIES = {
+    "Transportation": [],
+    "Groceries": [],
+    "Delivery": [],
+    "Health": [],
+    "Internet": [],
+    "Dining": [],
+    "Stuff": [],
+    "Laundry": [],
+    "Entertainment": [],
+    "Uncategorized": []
+}
+
+# High-confidence rules
+priority_rules = {
+    "uber": "Transportation",
+    "talabat": "Delivery",
+    "snoonu": "Delivery",
+    "carrefour": "Groceries",
+    "lulu": "Groceries",
+    "megamart": "Groceries",
+    "ooredoo": "Internet",
+    "cafe": "Dining",
+    "coffee": "Dining",
+    "restaurant": "Dining",
+    "adidas": "Stuff",
+    "sephora": "Stuff",
+    "zara": "Stuff",
+}
+
 # ---------------- SESSION ----------------
 if "categories" not in st.session_state:
-    st.session_state.categories = {"Uncategorized": []}
+    st.session_state.categories = DEFAULT_CATEGORIES.copy()
 
-# Load saved categories
+# Load saved categories and merge safely
 if os.path.exists(category_file):
     try:
         with open(category_file, "r") as f:
-            st.session_state.categories = json.load(f)
+            saved = json.load(f)
+
+            # Merge with defaults (ensures all categories exist)
+            for cat in DEFAULT_CATEGORIES:
+                if cat not in saved:
+                    saved[cat] = []
+
+            st.session_state.categories = saved
     except:
         pass
 
@@ -31,41 +70,54 @@ def save_categories():
         st.error(f"Could not save categories: {e}")
 
 
-# ---------------- KEYWORD EXTRACTION ----------------
-def extract_keywords(text):
+# ---------------- VENDOR EXTRACTION ----------------
+def extract_vendor(text):
     text = text.lower()
-
-    # Remove numbers and symbols
     text = re.sub(r"[^a-z\s]", " ", text)
 
     words = text.split()
 
-    # Common useless words to ignore
-    stopwords = {
-        "the", "and", "to", "for", "of", "in", "on", "at",
-        "pos", "txn", "card", "payment", "debit", "credit"
-    }
+    stopwords = {"payment", "debit", "credit", "pos", "txn", "purchase"}
 
-    keywords = [w for w in words if len(w) > 3 and w not in stopwords]
+    words = [w for w in words if w not in stopwords]
 
-    return list(set(keywords))  # unique words
+    return " ".join(words[:2])
 
 
 # ---------------- CATEGORIZATION ----------------
 def categorize_transactions(df):
     df["Category"] = "Uncategorized"
 
-    for category, keywords in st.session_state.categories.items():
-        if category == "Uncategorized":
+    for i, row in df.iterrows():
+        text = str(row["Details"]).lower()
+
+        # 1️⃣ Priority rules
+        matched = False
+        for key, cat in priority_rules.items():
+            if key in text:
+                df.at[i, "Category"] = cat
+                matched = True
+                break
+
+        if matched:
             continue
 
-        for keyword in keywords:
-            keyword = keyword.lower().strip()
+        # 2️⃣ Fuzzy matching
+        best_score = 0
+        best_category = "Uncategorized"
 
-            mask = df["Details"].astype(str).str.lower().str.contains(
-                rf"\b{keyword}\b", na=False
-            )
-            df.loc[mask, "Category"] = category
+        for category, keywords in st.session_state.categories.items():
+            if category == "Uncategorized":
+                continue
+
+            for keyword in keywords:
+                score = fuzz.partial_ratio(keyword, text)
+
+                if score > best_score and score > 80:
+                    best_score = score
+                    best_category = category
+
+        df.at[i, "Category"] = best_category
 
     return df
 
@@ -73,7 +125,6 @@ def categorize_transactions(df):
 # ---------------- LOAD DATA ----------------
 def load_transactions(file):
     try:
-        # Encoding fallback
         try:
             df = pd.read_csv(file, encoding="utf-8")
         except UnicodeDecodeError:
@@ -85,8 +136,6 @@ def load_transactions(file):
         df["Date"] = pd.to_datetime(df["Date"], dayfirst=True, errors="coerce")
 
         df["Category"] = "Uncategorized"
-
-        # Add Month column
         df["Month"] = df["Date"].dt.to_period("M").astype(str)
 
         return categorize_transactions(df)
@@ -96,21 +145,19 @@ def load_transactions(file):
         return None
 
 
-# ---------------- SMART LEARNING ----------------
-def add_keyword_to_category(category, description):
-    keywords = extract_keywords(description)
+# ---------------- LEARNING ----------------
+def add_keyword_to_category(category, description, amount):
+    if amount >= 0:
+        return False
 
-    added = False
+    vendor = extract_vendor(description)
 
-    for keyword in keywords:
-        if keyword not in st.session_state.categories.get(category, []):
-            st.session_state.categories[category].append(keyword)
-            added = True
-
-    if added:
+    if vendor and vendor not in st.session_state.categories.get(category, []):
+        st.session_state.categories[category].append(vendor)
         save_categories()
+        return True
 
-    return added
+    return False
 
 
 # ---------------- MAIN ----------------
@@ -124,7 +171,6 @@ def main():
 
         if df is not None:
 
-            # Split data
             expenses_df = df[df["Amount"] < 0].copy().reset_index(drop=True)
             refunds_df = df[df["Amount"] > 0].copy().reset_index(drop=True)
 
@@ -132,10 +178,10 @@ def main():
 
             tab1, tab2 = st.tabs(["📉 Expenses", "💵 Refunds"])
 
-            # ================= EXPENSES TAB =================
+            # ================= EXPENSES =================
             with tab1:
 
-                st.caption("💡 Categories are auto-predicted and improve over time")
+                st.caption("💡 Smart categorization with predefined categories")
 
                 # -------- MONTH FILTER --------
                 months = sorted(expenses_df["Month"].unique())
@@ -145,14 +191,6 @@ def main():
                     filtered_df = expenses_df[expenses_df["Month"] == selected_month]
                 else:
                     filtered_df = expenses_df
-
-                # -------- CATEGORY MANAGEMENT --------
-                new_category = st.text_input("New Category Name")
-                if st.button("Add Category"):
-                    if new_category and new_category not in st.session_state.categories:
-                        st.session_state.categories[new_category] = []
-                        save_categories()
-                        st.rerun()
 
                 # -------- TABLE --------
                 st.subheader("Expenses")
@@ -172,8 +210,10 @@ def main():
                     key="expense_editor"
                 )
 
-                # Save edits + LEARNING
+                # -------- APPLY CHANGES --------
                 if st.button("Apply Changes"):
+                    learned = 0
+
                     for idx, row in edited_df.iterrows():
                         original_idx = filtered_df.index[idx]
                         old_cat = expenses_df.at[original_idx, "Category"]
@@ -182,11 +222,12 @@ def main():
                         if old_cat != new_cat:
                             expenses_df.at[original_idx, "Category"] = new_cat
 
-                            # 🔥 Learn from correction
-                            add_keyword_to_category(new_cat, row["Details"])
+                            if add_keyword_to_category(new_cat, row["Details"], row["Amount"]):
+                                learned += 1
 
                     st.session_state.expenses_df = expenses_df
-                    st.success("Changes applied and system learned new patterns!")
+
+                    st.success(f"Changes applied. Learned {learned} vendor patterns.")
 
                 # -------- SUMMARY --------
                 st.subheader("Expense Summary")
@@ -275,7 +316,7 @@ def main():
 
                 st.dataframe(pivot_table, use_container_width=True)
 
-            # ================= REFUNDS TAB =================
+            # ================= REFUNDS =================
             with tab2:
                 st.subheader("Refunds")
 
