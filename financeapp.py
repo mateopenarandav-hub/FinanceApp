@@ -33,6 +33,9 @@ priority_rules = {
     "carrefour": "Groceries",
     "lulu": "Groceries",
     "megamart": "Groceries",
+    "monop": "Groceries",
+    "market": "Groceries",
+    "hyper": "Groceries",
     "ooredoo": "Internet",
     "cafe": "Dining",
     "coffee": "Dining",
@@ -42,6 +45,7 @@ priority_rules = {
     "zara": "Stuff",
     "ikea": "Stuff",
     "cinema": "Entertainment",
+    "virgin": "Entertainment",
 }
 
 # ---------------- SESSION ----------------
