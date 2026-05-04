@@ -44,6 +44,7 @@ priority_rules = {
     "sephora": "Stuff",
     "zara": "Stuff",
     "ikea": "Stuff",
+    "luxury": "Stuff",
     "cinema": "Entertainment",
     "virgin": "Entertainment",
     "entertain": "Entertainment",
