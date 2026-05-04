@@ -46,6 +46,7 @@ priority_rules = {
     "ikea": "Stuff",
     "cinema": "Entertainment",
     "virgin": "Entertainment",
+    "entertain": "Entertainment",
 }
 
 # ---------------- SESSION ----------------
