@@ -3,6 +3,7 @@ import pandas as pd
 import plotly.express as px
 import json
 import os
+import re
 
 # ---------------- CONFIG ----------------
 st.set_page_config(page_title="Finance App", page_icon="💰", layout="wide")
@@ -30,6 +31,26 @@ def save_categories():
         st.error(f"Could not save categories: {e}")
 
 
+# ---------------- KEYWORD EXTRACTION ----------------
+def extract_keywords(text):
+    text = text.lower()
+
+    # Remove numbers and symbols
+    text = re.sub(r"[^a-z\s]", " ", text)
+
+    words = text.split()
+
+    # Common useless words to ignore
+    stopwords = {
+        "the", "and", "to", "for", "of", "in", "on", "at",
+        "pos", "txn", "card", "payment", "debit", "credit"
+    }
+
+    keywords = [w for w in words if len(w) > 3 and w not in stopwords]
+
+    return list(set(keywords))  # unique words
+
+
 # ---------------- CATEGORIZATION ----------------
 def categorize_transactions(df):
     df["Category"] = "Uncategorized"
@@ -40,7 +61,10 @@ def categorize_transactions(df):
 
         for keyword in keywords:
             keyword = keyword.lower().strip()
-            mask = df["Details"].astype(str).str.lower().str.contains(keyword, na=False)
+
+            mask = df["Details"].astype(str).str.lower().str.contains(
+                rf"\b{keyword}\b", na=False
+            )
             df.loc[mask, "Category"] = category
 
     return df
@@ -72,16 +96,21 @@ def load_transactions(file):
         return None
 
 
-# ---------------- KEYWORD LEARNING ----------------
-def add_keyword_to_category(category, keyword):
-    keyword = keyword.strip()
+# ---------------- SMART LEARNING ----------------
+def add_keyword_to_category(category, description):
+    keywords = extract_keywords(description)
 
-    if keyword and keyword not in st.session_state.categories.get(category, []):
-        st.session_state.categories[category].append(keyword)
+    added = False
+
+    for keyword in keywords:
+        if keyword not in st.session_state.categories.get(category, []):
+            st.session_state.categories[category].append(keyword)
+            added = True
+
+    if added:
         save_categories()
-        return True
 
-    return False
+    return added
 
 
 # ---------------- MAIN ----------------
@@ -105,6 +134,8 @@ def main():
 
             # ================= EXPENSES TAB =================
             with tab1:
+
+                st.caption("💡 Categories are auto-predicted and improve over time")
 
                 # -------- MONTH FILTER --------
                 months = sorted(expenses_df["Month"].unique())
@@ -141,7 +172,7 @@ def main():
                     key="expense_editor"
                 )
 
-                # Save edits
+                # Save edits + LEARNING
                 if st.button("Apply Changes"):
                     for idx, row in edited_df.iterrows():
                         original_idx = filtered_df.index[idx]
@@ -150,9 +181,12 @@ def main():
 
                         if old_cat != new_cat:
                             expenses_df.at[original_idx, "Category"] = new_cat
+
+                            # 🔥 Learn from correction
                             add_keyword_to_category(new_cat, row["Details"])
 
                     st.session_state.expenses_df = expenses_df
+                    st.success("Changes applied and system learned new patterns!")
 
                 # -------- SUMMARY --------
                 st.subheader("Expense Summary")
@@ -176,7 +210,7 @@ def main():
                 )
                 st.plotly_chart(fig_pie, use_container_width=True)
 
-                # -------- MONTHLY TREND (BAR CHART) --------
+                # -------- MONTHLY TREND --------
                 st.subheader("Monthly Trend")
 
                 monthly_totals = (
