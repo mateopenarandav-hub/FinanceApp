@@ -28,6 +28,7 @@ DEFAULT_CATEGORIES = {
 # High-confidence rules
 priority_rules = {
     "uber": "Transportation",
+    "rail": "Transportation",
     "talabat": "Delivery",
     "snoonu": "Delivery",
     "carrefour": "Groceries",
@@ -37,9 +38,10 @@ priority_rules = {
     "market": "Groceries",
     "hyper": "Groceries",
     "ooredoo": "Internet",
+    "eat": "Dining",
     "cafe": "Dining",
     "coffee": "Dining",
-    "restaurant": "Dining",
+    "restauran": "Dining",
     "qlub": "Dining",
     "adidas": "Stuff",
     "sephora": "Stuff",
