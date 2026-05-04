@@ -46,6 +46,7 @@ priority_rules = {
     "zara": "Stuff",
     "ikea": "Stuff",
     "luxury": "Stuff",
+    "H & M": "Stuff",
     "cinema": "Entertainment",
     "virgin": "Entertainment",
     "entertain": "Entertainment",
