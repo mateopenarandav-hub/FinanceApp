@@ -40,6 +40,8 @@ priority_rules = {
     "adidas": "Stuff",
     "sephora": "Stuff",
     "zara": "Stuff",
+    "ikea": "Stuff",
+    "cinema": "Entertainment",
 }
 
 # ---------------- SESSION ----------------
