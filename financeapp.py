@@ -40,6 +40,7 @@ priority_rules = {
     "cafe": "Dining",
     "coffee": "Dining",
     "restaurant": "Dining",
+    "qlub": "Dining",
     "adidas": "Stuff",
     "sephora": "Stuff",
     "zara": "Stuff",
