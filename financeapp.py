@@ -53,6 +53,7 @@ priority_rules = {
     "virgin": "Entertainment",
     "entertain": "Entertainment",
     "ecolandia": "Entertainment",
+    "laundry": "Laundry",
 }
 
 # ---------------- SESSION ----------------
