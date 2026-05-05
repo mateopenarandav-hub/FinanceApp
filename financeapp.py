@@ -49,11 +49,17 @@ priority_rules = {
     "ikea": "Stuff",
     "luxury": "Stuff",
     "h&m": "Stuff",
+    "fashion": "Stuff",
     "cinema": "Entertainment",
     "virgin": "Entertainment",
     "entertain": "Entertainment",
     "ecolandia": "Entertainment",
+    "platinumlist": "Entertainment",
+    "museum": "Entertainment",
+    "goviral": "Entertainment",
     "laundry": "Laundry",
+    "clinic": "Health",
+    "health": "Health",
 }
 
 # ---------------- SESSION ----------------
